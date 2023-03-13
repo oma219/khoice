@@ -63,7 +63,10 @@ def get_canonical_kmer(kmer):
     comp = ""
     rev_comp_dict = {'A':'T', 'C':'G', 'G':'C', 'T':'A'}
     for ch in kmer:
-        comp += rev_comp_dict[ch]
+        if ch in rev_comp_dict:
+            comp += rev_comp_dict[ch]
+        else:
+            return ""
     rev_comp = comp[::-1]
 
     # Return the smaller of the two kmers ...
@@ -164,15 +167,19 @@ def main(args):
                         count = 0
                         for kmer in kmer_list:
                             canon_kmer = get_canonical_kmer(kmer)
-                            matches = curr_pivot_dict[canon_kmer][1:]
-                            if len(matches) > 0: # Occurs in at least 1 database
-                                for match in matches:
-                                    votes[match] += 1/len(matches)
-                                    votes_with_ucol[match] += 1/len(matches)
-                            elif len(matches) == 0: # Doesn't occur, so we smear weight across databases
-                                for i in range(num_datasets):
-                                    votes_with_ucol[i] += 1.0/num_datasets
-                                count += 1
+                            
+                            # If kmer is "", means it contains a non-ACGT kmer so KMC ignores it
+                            # so we will ignore it as well
+                            if canon_kmer != "":
+                                matches = curr_pivot_dict[canon_kmer][1:]
+                                if len(matches) > 0: # Occurs in at least 1 database
+                                    for match in matches:
+                                        votes[match] += 1/len(matches)
+                                        votes_with_ucol[match] += 1/len(matches)
+                                elif len(matches) == 0: # Doesn't occur, so we smear weight across databases
+                                    for i in range(num_datasets):
+                                        votes_with_ucol[i] += 1.0/num_datasets
+                                    count += 1
                         
                         # Determine which class is the prediction and update confusion matrix...
                         votes_np = np.array(votes)
