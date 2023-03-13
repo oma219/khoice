@@ -62,7 +62,7 @@ def extract_sequences(roll_entropy_list, msa_file, each_genome_dict, num_to_extr
     plt.axvline(x=start, color='red', linestyle="dashed")
     plt.axvline(x=middle, color='red', linestyle="dashed")
     plt.axvline(x=end, color='red', linestyle="dashed")
-    plt.axhline(y=0.35, color='black', linestyle="solid")
+    plt.axhline(y=0.20, color='black', linestyle="solid")
     plt.xlabel("Base Position in DNA Sequence")
     plt.ylabel("Avg Shannon Entropy (over 250 bp windows)")
     plt.savefig(msa_file + ".rolling_with_cuts.png", dpi=500, bbox_inches="tight")
@@ -131,7 +131,7 @@ def parse_arguments():
     parser.add_argument("--plots", action="store_true", help="make analysis plots for multiple sequence alignment", default=False)
     parser.add_argument("--extract", action="store_true", help="extract sequences from each sequence", default=False)
     parser.add_argument("-n", dest="num_to_extract", help="number of sequences to extract", default=0, type=int)
-    parser.add_argument("-o", dest="output_dir", help="path to output directory")
+    parser.add_argument("-o", dest="output_dir", help="path to output directory", default="")
     args = parser.parse_args()
     return args
 
