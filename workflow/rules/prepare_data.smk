@@ -78,7 +78,7 @@ rule generate_raw_positive_short_reads_exp0:
     shell:
         """
         gzip -d {input} -k -f
-        art_illumina -ss HS25 -i trial_{wildcards.trial}/exp0_pivot_genomes/dataset_{wildcards.num}/pivot_{wildcards.num}.fna -na -l 150 -f 100.0 \
+        art_illumina -ss HS25 -i trial_{wildcards.trial}/exp0_pivot_genomes/dataset_{wildcards.num}/pivot_{wildcards.num}.fna -na -l 150 -f 40.0 \
         -o trial_{wildcards.trial}/exp0_pivot_reads/dataset_{wildcards.num}/illumina/pivot_{wildcards.num}
         rm trial_{wildcards.trial}/exp0_pivot_genomes/dataset_{wildcards.num}/pivot_{wildcards.num}.fna
 
@@ -94,7 +94,7 @@ rule generate_raw_positive_long_reads_exp0:
     shell:
         """
         gzip -d {input} -k -f
-        pbsim --depth 100.0 --prefix trial_{wildcards.trial}/exp0_pivot_reads/dataset_{wildcards.num}/ont/pivot_{wildcards.num} \
+        pbsim --depth 40.0 --prefix trial_{wildcards.trial}/exp0_pivot_reads/dataset_{wildcards.num}/ont/pivot_{wildcards.num} \
         --hmm_model {pbsim_model} --accuracy-mean 0.95 --length-min 900 --length-max 1100 trial_{wildcards.trial}/exp0_pivot_genomes/dataset_{wildcards.num}/pivot_{wildcards.num}.fna
         
         cat 'trial_{wildcards.trial}/exp0_pivot_reads/dataset_{wildcards.num}/ont/pivot_{wildcards.num}'*.fastq > trial_{wildcards.trial}/exp0_pivot_reads/dataset_{wildcards.num}/ont/pivot_{wildcards.num}.fastq
