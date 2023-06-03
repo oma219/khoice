@@ -33,6 +33,16 @@ class BuildConfig:
     repo_dir: str
     pbsim_model: str
 
+@dataclass
+class RunConfig:
+    """Class for maintaing the config setup."""
+    data_dir: str
+    work_dir: str
+    exp_num: int
+    num_datasets: int
+    trial_num: int
+    repo_dir: str
+
 ###########################################################
 # Main methods for different sub-commands
 ###########################################################
@@ -45,7 +55,7 @@ Main function for build sub-command
 def build_main(args):    
     # make sure the arguments are valid
     check_build_arguments(args)
-    start = time.process_time()
+    start = time.time()
 
     if args.dry_run:
         logging.info("Dry run is activated. No snakemake workflows will be executed."); print()
@@ -65,7 +75,6 @@ def build_main(args):
     # update the working directory path, and make directory
     args.work_dir = args.work_dir + f"database_{curr_db_num}" if args.work_dir[-1] == "/" else args.work_dir + f"/database_{curr_db_num}"
     if not args.dry_run:
-        print("why is it in here")
         execute_command(f"mkdir {args.work_dir}")
 
     # create a config object with parameters
@@ -93,7 +102,12 @@ def build_main(args):
         if exit_code:
             print_error(f"the snakemake command exited with an error code ({exit_code})")
     
-    logging.info(f"build has completed, total time ({(time.process_time()-start):.3f} sec)\n")
+    # remove folder if doing a dry-run since snakemake
+    # seems to create it even during a dry-run
+    if args.dry_run:
+        execute_command(f"rm -r {args.work_dir}")
+
+    logging.info(f"build has completed, total time ({(time.time()-start):.3f} sec)\n")
 
 
 """
@@ -102,11 +116,88 @@ Main function for run sub-command
 :param args: argument object containing command-line parameters
 """
 def run_main(args):
-    raise NotImplementedError("Run sub-command is not implemented yet.")
+    # make sure the arguments are valid
+    check_run_arguments(args)
+    start = time.time()
+
+    if args.dry_run:
+        logging.info("Dry run is activated. No snakemake workflows will be executed.")
+    
+    # identify how many trials/replicates are in the database to
+    # verify that we have a valid number
+    num_replicates, num_datasets = inspect_data_directory_for_run(args.data_dir)
+    if args.curr_trial <= num_replicates:
+        logging.info(f"found {num_replicates} random trials, and {num_datasets} groups in the database folder")
+    else:
+        print_error(f"only found {num_replicates} trials, but requested trial number {args.curr_trial}")
+    
+    # get experiment num 
+    exp_num = -1
+    if args.exp_2:
+        exp_num = 2
+
+    # create a config object with parameters
+    configSettings = RunConfig(args.data_dir, args.work_dir, exp_num, num_datasets, 
+                               args.curr_trial, args.repo_dir)
+    
+    # get the snakemake command, and then store stdout, stderr
+    cmd = build_snakemake_command_for_run(configSettings, args.dry_run); print()
+    if not args.dry_run:
+        logging.info(f"snakemake run command is starting now (using trial #{args.curr_trial})...")
+    else:
+        logging.info("snakemake dry-run is being generated now ...")
+
+    # save the snakemake command to a log file
+    with open("khoice.snakemake.log", "w") as log_fd:
+        log_fd.write(cmd + "\n")
+    
+    # write out the stdout, stderr to files
+    with open("khoice.stderr.log", "w+") as stderr_fd, open("khoice.stdout.log", "w+") as stdout_fd:
+        if not args.dry_run:
+            exit_code = execute_command_with_files_and_poll(cmd, stdout_fd, stderr_fd, "run progress")
+        else:
+            exit_code = execute_command_with_files(cmd, stderr_fd, stdout_fd)
+        
+        if exit_code:
+            print_error(f"the snakemake command exited with an error code ({exit_code})")
+
+    # state where the final data is if it was executed.
+    saved_loc = ""
+    if not args.dry_run:
+        if args.exp_2:
+            saved_loc = "within_dataset_analysis_type_2, across_dataset_analysis_type_2"
+        logging.info(f"output results saved here: {saved_loc}")
+
+    logging.info(f"run has completed, total time ({(time.time()-start):.3f} sec)\n")
 
 ###########################################################
 # Helper methods for both sub-commands
 ###########################################################
+
+"""
+Inspects the database folder to identify how many trials
+there are in this database, and verifies the structure is 
+as expected.
+
+:param: database_dir - path to database folder
+:return: [num_replicates, num_datasets] - number of trials that were created
+"""
+def inspect_data_directory_for_run(database_dir):
+    trial_re = re.compile('trial_[0-9]+$')
+    max_num = 0; max_dataset_num = 0
+    for item in os.listdir(database_dir):
+        if trial_re.match(item):
+            max_num = max(max_num, int(item.split("_")[1]))
+        elif item != "trial_summaries" and item[0] != ".":
+            print_error(f"{item} was found, but not expected in database directory.")
+    
+    dataset_re = re.compile("dataset_[0-9]+")
+    database_dir += "/" if database_dir[-1] != "/" else database_dir
+    for item in os.listdir(database_dir + f"trial_{max_num}/exp0_pivot_genomes/"):
+        if dataset_re.match(item):
+            max_dataset_num = max(max_dataset_num, int(item.split("_")[1]))
+    
+    return [max_num, max_dataset_num]  
 
 """
 Inspects the database directory for the build sub-command
@@ -153,6 +244,7 @@ the database
 
 :param: config - Config object with all the of the fields needed
 :param: dry_run - boolean variable for if build is dry-run or not
+:return: cmd - a string of the snakemake command that will be run
 """
 def build_snakemake_command_for_build(config, dry_run) -> str:
     exec_status = "-n" if dry_run else "-c1"
@@ -167,6 +259,32 @@ def build_snakemake_command_for_build(config, dry_run) -> str:
                               {} make_all_data_summaries_exp0".format(config.data_dir, config.work_dir, config.exp_num,
                                                                        config.num_datasets, config.num_trials, config.kmers_per_dataset,
                                                                        config.repo_dir, config.pbsim_model, exec_status)
+    return cmd
+
+"""
+Builds the snakemake command for running an
+experiment
+
+:param: config - Config object with all the of the fields needed
+:param: dry_run - boolean variable for if build is dry-run or not
+:return: cmd - a string of the snakemake command to be run
+"""
+def build_snakemake_command_for_run(config, dry_run) -> str:
+    exec_status = "-n" if dry_run else "-c1"
+    
+    target = ""
+    if config.exp_num == 2:
+        target = "generate_exp2_output"
+    
+    cmd = "snakemake --config DATABASE_ROOT={} \
+                              WORK_ROOT={} \
+                              EXP_TYPE={} \
+                              NUM_DATASETS={} \
+                              TRIAL_NUM={} \
+                              REPO_DIRECTORY={} \
+                              {} {}".format(config.data_dir, config.work_dir, config.exp_num,
+                                                                       config.num_datasets, config.trial_num,
+                                                                       config.repo_dir, exec_status, target)
     return cmd
 
 ###########################################################
@@ -204,6 +322,12 @@ def parse_arguments():
     run_parser = sub_parsers.add_parser('run', 
                                         help='run an experiment with database', 
                                         description="Runs an experiment using a khoice database.")
+    run_parser.add_argument("-d", "--database", dest="data_dir", help="folder path with processed data files", required=True, type=str)
+    run_parser.add_argument("-w", "--workdir", dest="work_dir", help="folder path to where the working directory is", required=True, type=str)
+    run_parser.add_argument("-t", "--curr-trial", dest="curr_trial", help="trial number to use for an experiment", required=True, type=int)
+    run_parser.add_argument("--repo-dir", dest="repo_dir", help="path to khoice repo", required=True, type=str)
+    run_parser.add_argument("--dry-run", dest="dry_run", action="store_true", default=False, help="do not run the snakemake, just run a dry run")
+    run_parser.add_argument("--exp2", dest="exp_2", action="store_true", default=False, help="run experiment 2.")
     run_parser.set_defaults(func="run")
 
     args = parser.parse_args()
@@ -236,7 +360,17 @@ sub-command are valid, and make sense.
 :param: args - arguments object from argparse
 """
 def check_run_arguments(args):
-    raise NotImplementedError("")
+    if not os.path.isdir(args.data_dir):
+        print_error("the data directory path (-d) is not valid.\n")
+    if not os.path.isdir(args.work_dir):
+        print_error("the working directory (-w) is not valid.\n")
+    if not os.path.isdir(args.repo_dir):
+        print_error("the path provided for the khoice repository is not valid")
+    if args.curr_trial < 1:
+        print_error("the trial number cannot be negative.\n")
+    count = sum([args.exp_2])
+    if count != 1:
+        print_error("must specify exactly one of the experiments to run.")
 
 
 ###########################################################
@@ -252,7 +386,6 @@ code.
 def print_error(msg) -> None:
     print("\n\033[0;31mError:\033[00m " + msg + "\n")
     exit(1)
-
 
 """
 Prints out a continue message to user and
@@ -273,6 +406,19 @@ def prompt_user_for_continuation(msg):
     if decision.upper() == "N":
         print("\nexiting now ...\n")
         exit(0)
+
+"""
+Execute a command using subprocess module, but return
+the stdout, stderr, and code
+
+:param: cmd - a string with the command-line expression
+:return: exit_code - exit code from command
+"""
+def execute_command(cmd):
+    process = subprocess.Popen(cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    stdout, stderr = process.communicate()
+    exit_code = process.returncode
+    return [stdout, stderr, exit_code]
 
 """
 Execute a command using subprocess module
