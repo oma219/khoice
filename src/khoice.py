@@ -42,6 +42,7 @@ class RunConfig:
     num_datasets: int
     trial_num: int
     repo_dir: str
+    out_pivot: bool
 
 ###########################################################
 # Main methods for different sub-commands
@@ -109,7 +110,6 @@ def build_main(args):
 
     logging.info(f"build has completed, total time ({(time.time()-start):.3f} sec)\n")
 
-
 """
 Main function for run sub-command
 
@@ -126,53 +126,116 @@ def run_main(args):
     # identify how many trials/replicates are in the database to
     # verify that we have a valid number
     num_replicates, num_datasets = inspect_data_directory_for_run(args.data_dir)
-    if args.curr_trial <= num_replicates:
-        logging.info(f"found {num_replicates} random trials, and {num_datasets} groups in the database folder")
-    else:
-        print_error(f"only found {num_replicates} trials, but requested trial number {args.curr_trial}")
-    
-    # get experiment num 
-    exp_num = -1
-    if args.exp_2:
-        exp_num = 2
+    trials_to_run = validate_trials_arg(args.curr_trial, num_replicates)
 
-    # create a config object with parameters
-    configSettings = RunConfig(args.data_dir, args.work_dir, exp_num, num_datasets, 
-                               args.curr_trial, args.repo_dir)
-    
-    # get the snakemake command, and then store stdout, stderr
-    cmd = build_snakemake_command_for_run(configSettings, args.dry_run); print()
-    if not args.dry_run:
-        logging.info(f"snakemake run command is starting now (using trial #{args.curr_trial})...")
-    else:
-        logging.info("snakemake dry-run is being generated now ...")
+    for curr_trial in trials_to_run:
+        print(); logging.info(f"experiment #{args.exp_num} is being used.")
 
-    # save the snakemake command to a log file
-    with open("khoice.snakemake.log", "w") as log_fd:
-        log_fd.write(cmd + "\n")
-    
-    # write out the stdout, stderr to files
-    with open("khoice.stderr.log", "w+") as stderr_fd, open("khoice.stdout.log", "w+") as stdout_fd:
-        if not args.dry_run:
-            exit_code = execute_command_with_files_and_poll(cmd, stdout_fd, stderr_fd, "run progress")
-        else:
-            exit_code = execute_command_with_files(cmd, stderr_fd, stdout_fd)
+        # create the working directory for specific trial
+        curr_work_dir = args.work_dir + f"trial_{curr_trial}/"
+        execute_command(f"mkdir {curr_work_dir}")
+
+        # create a config object with parameters
+        configSettings = RunConfig(args.data_dir, curr_work_dir, args.exp_num, num_datasets, 
+                                curr_trial, args.repo_dir, not args.in_pivot)
         
-        if exit_code:
-            print_error(f"the snakemake command exited with an error code ({exit_code})")
+        # get the snakemake command, and then store stdout, stderr
+        cmd = build_snakemake_command_for_run(configSettings, args.dry_run)
+        if not args.dry_run:
+            logging.info(f"snakemake run command is starting now (using trial #{curr_trial})...")
+        else:
+            logging.info(f"snakemake dry-run is being generated now (using trial #{curr_trial})...")
+            if len(trials_to_run) > 1:
+                print_warning("dry-run will be run with respect to one trial, despite multipe trials being requested.")
 
-    # state where the final data is if it was executed.
-    saved_loc = ""
-    if not args.dry_run:
-        if args.exp_2:
-            saved_loc = "within_dataset_analysis_type_2, across_dataset_analysis_type_2"
-        logging.info(f"output results saved here: {saved_loc}")
+        # save the snakemake command to a log file
+        with open("khoice.snakemake.log", "w+") as log_fd:
+            log_fd.write(cmd + "\n")
+        
+        # write out the stdout, stderr to files
+        with open("khoice.stderr.log", "w+") as stderr_fd, open("khoice.stdout.log", "w+") as stdout_fd:
+            if not args.dry_run:
+                exit_code = execute_command_with_files_and_poll(cmd, stdout_fd, stderr_fd, "run progress")
+            else:
+                exit_code = execute_command_with_files(cmd, stderr_fd, stdout_fd)
+            
+            if exit_code:
+                print_error(f"the snakemake command exited with an error code ({exit_code})")
+
+        # state where the final data is if it was executed.
+        saved_loc = ""
+        if not args.dry_run:
+            saved_loc = final_file_name_for_exp(args, curr_trial)
+            logging.info(f"output results saved here: {saved_loc}")
+        else:
+            break
 
     logging.info(f"run has completed, total time ({(time.time()-start):.3f} sec)\n")
 
 ###########################################################
 # Helper methods for both sub-commands
 ###########################################################
+
+"""
+Return the name of the final data file based
+on which experiment is being run
+
+:param: args - command line arguments
+:return: path - string with the name of the final data file
+"""
+def final_file_name_for_exp(args, curr_trial):
+    path = ""
+    if args.exp_2:
+        path = "within_dataset_analysis_type_2, across_dataset_analysis_type_2"
+    elif args.exp_4:
+        path = "accuracies_type_4/accuracy_values.csv"
+    elif args.exp_6:
+        path = f"trial_{curr_trial}_short_acc.csv, trial_{curr_trial}_long_acc.csv"
+    elif args.exp_7:
+        path =f"trial_{curr_trial}_mems_illumina.csv, trial_{curr_trial}_mems_ont.csv"
+    return path
+
+
+"""
+Looks at the trial argument and makes sure it is in a valid
+format either using a hyphen (-) or comma (,) to separate
+multiple trials.
+
+:param: trial_arg - string variable with trials requested by user
+:error: argument is not in valid format
+:error: one or more of the trial # is not valid
+"""
+def validate_trials_arg(trial_arg, num_trials):
+    # prepare data
+    trials = []; numrange = False
+    if "-" in trial_arg:
+        trials = trial_arg.split("-")
+        numrange = True
+        if len(trials) != 2:
+            print_error("when using hyphen, there must be two numbers provided to specify range.")
+    elif "," in trial_arg:
+        trials = trial_arg.split(",")
+    else:
+        if not trial_arg.isdigit():
+            print_error("trial numbers provided with -t is not valid format.")
+        else:
+            return [int(trial_arg)]
+    
+    # go through a series of checks, and modifications
+    if not all([x.isdigit() for x in trials]):
+        print_error("not all the trials provided with -t are numbers.")
+    
+    trials = [int(x) for x in trials]
+    if not all([(x >= 1 and x <= num_trials) for x in trials]): 
+        print_error("one or more of the trials provided with -t is not valid.")
+    
+    if numrange and trials[0] >= trials[1]:
+        print_error("range specified with -t is not valid.")
+    
+    # fill in range if specified
+    if numrange:
+        trials = list(range(trials[0], trials[1]+1))
+    return trials
 
 """
 Inspects the database folder to identify how many trials
@@ -275,6 +338,12 @@ def build_snakemake_command_for_run(config, dry_run) -> str:
     target = ""
     if config.exp_num == 2:
         target = "generate_exp2_output"
+    elif config.exp_num == 4:
+        target = "generate_exp4_output"
+    elif config.exp_num == 6:
+        target = "generate_exp6_output"
+    elif config.exp_num == 7:
+        target = "generate_exp7_output"
     
     cmd = "snakemake --config DATABASE_ROOT={} \
                               WORK_ROOT={} \
@@ -282,9 +351,10 @@ def build_snakemake_command_for_run(config, dry_run) -> str:
                               NUM_DATASETS={} \
                               TRIAL_NUM={} \
                               REPO_DIRECTORY={} \
+                              OUT_PIVOT={} \
                               {} {}".format(config.data_dir, config.work_dir, config.exp_num,
                                                                        config.num_datasets, config.trial_num,
-                                                                       config.repo_dir, exec_status, target)
+                                                                       config.repo_dir, config.out_pivot, exec_status, target)
     return cmd
 
 ###########################################################
@@ -324,10 +394,14 @@ def parse_arguments():
                                         description="Runs an experiment using a khoice database.")
     run_parser.add_argument("-d", "--database", dest="data_dir", help="folder path with processed data files", required=True, type=str)
     run_parser.add_argument("-w", "--workdir", dest="work_dir", help="folder path to where the working directory is", required=True, type=str)
-    run_parser.add_argument("-t", "--curr-trial", dest="curr_trial", help="trial number to use for an experiment", required=True, type=int)
+    run_parser.add_argument("-t", "--curr-trial", dest="curr_trial", help="trial number(s) to use for an experiment (e.g. 1-5 or 1,3,4)", required=True, type=str)
     run_parser.add_argument("--repo-dir", dest="repo_dir", help="path to khoice repo", required=True, type=str)
     run_parser.add_argument("--dry-run", dest="dry_run", action="store_true", default=False, help="do not run the snakemake, just run a dry run")
     run_parser.add_argument("--exp2", dest="exp_2", action="store_true", default=False, help="run experiment 2.")
+    run_parser.add_argument("--exp4", dest="exp_4", action="store_true", default=False, help="run experiment 4.")
+    run_parser.add_argument("--exp6", dest="exp_6", action="store_true", default=False, help="run experiment 6.")
+    run_parser.add_argument("--exp7", dest="exp_7", action="store_true", default=False, help="run experiment 7.")
+    run_parser.add_argument("--in-pivot", dest="in_pivot", action="store_true", default=False, help="(only for exp 4) use in-pivot opposed to out-pivot")
     run_parser.set_defaults(func="run")
 
     args = parser.parse_args()
@@ -366,11 +440,17 @@ def check_run_arguments(args):
         print_error("the working directory (-w) is not valid.\n")
     if not os.path.isdir(args.repo_dir):
         print_error("the path provided for the khoice repository is not valid")
-    if args.curr_trial < 1:
-        print_error("the trial number cannot be negative.\n")
-    count = sum([args.exp_2])
+
+    count = 0
+    for turned_on, val in [[args.exp_2, 2], [args.exp_4, 4], [args.exp_6, 6], [args.exp_7, 7]]:
+        if turned_on:
+            args.exp_num = val
+            count += 1
     if count != 1:
         print_error("must specify exactly one of the experiments to run.")
+
+    if args.work_dir[-1] != "/":
+        args.work_dir += "/"
 
 
 ###########################################################
@@ -386,6 +466,14 @@ code.
 def print_error(msg) -> None:
     print("\n\033[0;31mError:\033[00m " + msg + "\n")
     exit(1)
+
+"""
+Prints out a warning message.
+
+:param: msg - the error message
+"""
+def print_warning(msg) -> None:
+    print("\n\033[0;33mWarning:\033[00m " + msg + "\n")
 
 """
 Prints out a continue message to user and
@@ -482,7 +570,7 @@ if __name__ == '__main__':
     # old format: datefmt="%Y-%m-%d %H:%M:%S"
     logging.basicConfig(level=logging.DEBUG, format='\033[0;32m[log][%(asctime)s]\033[00m %(message)s', datefmt="%H:%M:%S")
 
-    print(f"\n\033[0;31mkhoice version: {__VERSION__}\033[00m\n")
+    print(f"\n\033[0;32mkhoice version: {__VERSION__}\033[00m\n")
     if args.func == "build":    
         build_main(args)
     elif args.func == "run":
