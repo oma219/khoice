@@ -8,6 +8,8 @@ NUM_TRIALS: 5
 CURR_TRIAL: 1
 OUT_PIVOT: True
 THRESHOLD: 15
+FEAT_LEVEL_OPT: "dummy_var" # Use this for classification at the read level
+#FEAT_LEVEL_OPT: "--use-feat-level" # Use this if you want classification at feature level
 PBSIM_MODEL: "/home/oahmed6/pbsim2/data/R95.model"
 KMERS_PER_DATASET: 1000000
 NON_KMERS_PER_DATASET: 25000000
