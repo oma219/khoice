@@ -83,14 +83,14 @@ def main(args):
         print("[log] For pivot {pivot_num}, we received a total weight of {num:.3f}".format(pivot_num=i, num=input_entries))
 
         # Determine the strategy we will use to build confusion matrix
-        if args.read_dir is not None:
+        if not args.use_feat_level:
             print("[log] the confusion matrix will be generated at the read-level.")
         else:
             print("[log] the confusion matrix will be generated at the feature-level.") 
         
         # Populate confusion matrix and count entries
         total_entries = 0
-        if args.read_dir is None: # Feature-level
+        if args.use_feat_level: # Feature-level
             for key in read_mappings:
                 mem_len = read_mappings[key][0] # Noise is already included here
                 curr_set = set(read_mappings[key][1:])
@@ -177,7 +177,8 @@ def parse_arguments():
     parser.add_argument("--mems", action="store_true", default=False, dest="mems", help="sam corresponds to mems (it can either be mems or half-mems, not both)")
     parser.add_argument("-t", "--threshold", dest = "t", required=False, default=0, help="optional threshold value for experiment 8", type = int)
     parser.add_argument("-l", "--length-text", dest = "fasta_index_file", required=False, default="", help="path to .fai file with total reference length")
-    parser.add_argument("-r", "--read-dir", dest="read_dir", nargs=1, help="directory with read files for each pivot")
+    parser.add_argument("-r", "--read-dir", dest="read_dir", nargs='*', help="directory with read files for each pivot")
+    parser.add_argument("--use-feat-level", dest="use_feat_level", action="store_true", default=False, help="turn this on if you want to do classification at feature-level")
     args = parser.parse_args()
     return args
 

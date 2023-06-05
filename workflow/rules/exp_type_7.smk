@@ -273,7 +273,7 @@ rule analyze_sam_for_each_type_exp7:
         -o {base_dir}/exp7_output_data/{wildcards.mem_type}/{wildcards.read_type}/ \
         --{wildcards.mem_type} \
         -l exp7_combined_ref_fai/combined_ref_forward_only.fna.fai \
-        -r exp7_{wildcards.mem_type}_data/{wildcards.read_type}/
+        -r exp7_{wildcards.mem_type}_data/{wildcards.read_type}/ {feat_level_opt}
         """
 
 #   Section 3.9: Gather all the output files needed for full

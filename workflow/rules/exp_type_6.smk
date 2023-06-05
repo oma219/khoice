@@ -335,8 +335,8 @@ rule run_merge_list_exp6:
         -i exp6_filelists/k_{wildcards.k}/{wildcards.read_type}/intersections_filelist.txt \
         -o exp6_accuracies/{wildcards.read_type}/ \
         -n {num_datasets} \
-        -k {wildcards.k} \
-        -r exp6_input/pivot_reads_subset/{wildcards.read_type}/ # Comment this out if you want to do feature-level
+        -k {wildcards.k}  \
+        -r exp6_input/pivot_reads_subset/{wildcards.read_type}/ {feat_level_opt} 
 
         # Remove text dumps for this k and read type
         rm exp6_text_dump/k_{wildcards.k}/{wildcards.read_type}/intersection/pivot_*/pivot_*_intersect_dataset_*.txt

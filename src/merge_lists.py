@@ -95,7 +95,7 @@ def main(args):
     print("[log] all file paths are valid, now will start to merge the lists.")
 
     # Determine how analysis will be done ...
-    if args.read_level is None:
+    if args.use_feat_level:
         print("[log] analysis will be done at feature-level")
     else:
         print("[log] analysis will be done at the read-level")
@@ -134,7 +134,7 @@ def main(args):
         # Fill in the current row of the confusion matrix (depends on whether we
         # want to do analysis at read-level or feature-level)
 
-        if args.read_level is None: # feature-level
+        if args.use_feat_level: # feature-level
             for kmer in curr_pivot_dict:
                 count = curr_pivot_dict[kmer][0]
                 matches = curr_pivot_dict[kmer][1:]
@@ -225,7 +225,8 @@ def parse_arguments():
     parser.add_argument("-i", "--intersect_list", dest="intersect_list", required=True, help="path to text file with a list of kmer lists representing the intersections")
     parser.add_argument("-o", "--output_path", dest = "output_path", required=True, help = "path to output directory") # Match snakemake format
     parser.add_argument("-k", "--k_value", dest = "k", required = True, help = "k value for this experiment")
-    parser.add_argument("-r", "--read-level", dest="read_level", help="perform analysis at read-level (default: feature-level)", nargs=1)
+    parser.add_argument("-r", "--read-level", dest="read_level", help="perform analysis at read-level (default: feature-level)", nargs="*", required=True)
+    parser.add_argument("--use-feat-level", dest="use_feat_level", action="store_true", default=False, help="turn this on if you want to do classification at feature-level")
     args = parser.parse_args()
     return args
 
