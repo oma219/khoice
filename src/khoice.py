@@ -43,17 +43,18 @@ class RunConfig:
     trial_num: int
     repo_dir: str
     out_pivot: bool
+    feat_level_opt: str
 
 ###########################################################
 # Main methods for different sub-commands
 ###########################################################
 
-"""
-Main function for build sub-command
+def build_main(args):  
+    """
+    Main function for build sub-command
 
-:param args: argument object containing command-line parameters
-"""
-def build_main(args):    
+    :param args: argument object containing command-line parameters
+    """  
     # make sure the arguments are valid
     check_build_arguments(args)
     start = time.time()
@@ -110,12 +111,12 @@ def build_main(args):
 
     logging.info(f"build has completed, total time ({(time.time()-start):.3f} sec)\n")
 
-"""
-Main function for run sub-command
-
-:param args: argument object containing command-line parameters
-"""
 def run_main(args):
+    """
+    Main function for run sub-command
+
+    :param args: argument object containing command-line parameters
+    """
     # make sure the arguments are valid
     check_run_arguments(args)
     start = time.time()
@@ -128,8 +129,12 @@ def run_main(args):
     num_replicates, num_datasets = inspect_data_directory_for_run(args.data_dir)
     trials_to_run = validate_trials_arg(args.curr_trial, num_replicates)
 
+    # get the valid config option for the FEAT_LEVEL_OPT variable
+    feat_level_opt = "--use-feat-level" if args.feat_level else "dummy_var"
+
     for curr_trial in trials_to_run:
         print(); logging.info(f"experiment #{args.exp_num} is being used.")
+        assert curr_trial >= 1 and curr_trial <= num_replicates
 
         # create the working directory for specific trial
         curr_work_dir = args.work_dir + f"trial_{curr_trial}/"
@@ -137,10 +142,11 @@ def run_main(args):
 
         # create a config object with parameters
         configSettings = RunConfig(args.data_dir, curr_work_dir, args.exp_num, num_datasets, 
-                                curr_trial, args.repo_dir, not args.in_pivot)
+                                curr_trial, args.repo_dir, not args.in_pivot, feat_level_opt)
         
         # get the snakemake command, and then store stdout, stderr
         cmd = build_snakemake_command_for_run(configSettings, args.dry_run)
+
         if not args.dry_run:
             logging.info(f"snakemake run command is starting now (using trial #{curr_trial})...")
         else:
@@ -176,14 +182,14 @@ def run_main(args):
 # Helper methods for both sub-commands
 ###########################################################
 
-"""
-Return the name of the final data file based
-on which experiment is being run
-
-:param: args - command line arguments
-:return: path - string with the name of the final data file
-"""
 def final_file_name_for_exp(args, curr_trial):
+    """
+    Return the name of the final data file based
+    on which experiment is being run
+
+    :param: args - command line arguments
+    :return: path - string with the name of the final data file
+    """
     path = ""
     if args.exp_2:
         path = "within_dataset_analysis_type_2, across_dataset_analysis_type_2"
@@ -195,18 +201,16 @@ def final_file_name_for_exp(args, curr_trial):
         path =f"trial_{curr_trial}_mems_illumina.csv, trial_{curr_trial}_mems_ont.csv"
     return path
 
-
-"""
-Looks at the trial argument and makes sure it is in a valid
-format either using a hyphen (-) or comma (,) to separate
-multiple trials.
-
-:param: trial_arg - string variable with trials requested by user
-:error: argument is not in valid format
-:error: one or more of the trial # is not valid
-"""
 def validate_trials_arg(trial_arg, num_trials):
-    # prepare data
+    """
+    Looks at the trial argument and makes sure it is in a valid
+    format either using a hyphen (-) or comma (,) to separate
+    multiple trials.
+
+    :param: trial_arg - string variable with trials requested by user
+    :error: argument is not in valid format
+    :error: one or more of the trial # is not valid
+    """
     trials = []; numrange = False
     if "-" in trial_arg:
         trials = trial_arg.split("-")
@@ -218,6 +222,8 @@ def validate_trials_arg(trial_arg, num_trials):
     else:
         if not trial_arg.isdigit():
             print_error("trial numbers provided with -t is not valid format.")
+        elif int(trial_arg) < 1 or int(trial_arg) > num_trials:
+            print_error("the trial number provided is not valid.")
         else:
             return [int(trial_arg)]
     
@@ -237,15 +243,15 @@ def validate_trials_arg(trial_arg, num_trials):
         trials = list(range(trials[0], trials[1]+1))
     return trials
 
-"""
-Inspects the database folder to identify how many trials
-there are in this database, and verifies the structure is 
-as expected.
-
-:param: database_dir - path to database folder
-:return: [num_replicates, num_datasets] - number of trials that were created
-"""
 def inspect_data_directory_for_run(database_dir):
+    """
+    Inspects the database folder to identify how many trials
+    there are in this database, and verifies the structure is 
+    as expected.
+
+    :param: database_dir - path to database folder
+    :return: [num_replicates, num_datasets] - number of trials that were created
+    """
     trial_re = re.compile('trial_[0-9]+$')
     max_num = 0; max_dataset_num = 0
     for item in os.listdir(database_dir):
@@ -262,17 +268,17 @@ def inspect_data_directory_for_run(database_dir):
     
     return [max_num, max_dataset_num]  
 
-"""
-Inspects the database directory for the build sub-command
-and makes sure it has the directory structure expected
-if it were to be downloaded using the download script.
-
-:param: data_dir - directory path with the raw data
-:return: num_datasets - number of different groups in database
-
-:error: when folder is formated correctly.
-"""
 def inspect_data_directory_for_build(data_dir) -> int:
+    """
+    Inspects the database directory for the build sub-command
+    and makes sure it has the directory structure expected
+    if it were to be downloaded using the download script.
+
+    :param: data_dir - directory path with the raw data
+    :return: num_datasets - number of different groups in database
+
+    :error: when folder is formated correctly.
+    """
     dataset_re = re.compile('dataset_[0-9]+$')
     max_num = 0
     for item in os.listdir(data_dir):
@@ -282,16 +288,16 @@ def inspect_data_directory_for_build(data_dir) -> int:
             print_error(f"{item} was found, but not expected in data directory.")
     return max_num
 
-"""
-Inspect the working directory for the build sub-command and
-make sure that the requested database is not already built.
-
-:param: work_dir - path to the working directory, where database_* will go
-:return: num_database - the database number that will be created
-
-:error: when there are unexpected folders in that directory
-"""
 def inspect_work_directory_for_build(work_dir) -> int:
+    """
+    Inspect the working directory for the build sub-command and
+    make sure that the requested database is not already built.
+
+    :param: work_dir - path to the working directory, where database_* will go
+    :return: num_database - the database number that will be created
+
+    :error: when there are unexpected folders in that directory
+    """
     dataset_re = re.compile('database_[0-9]+$')
     max_num = 0
     for item in os.listdir(work_dir):
@@ -301,15 +307,15 @@ def inspect_work_directory_for_build(work_dir) -> int:
             print_error(f"{item} was found, but not expected in working directory.")
     return max_num+1
 
-"""
-Builds the snakemake command for the building 
-the database
-
-:param: config - Config object with all the of the fields needed
-:param: dry_run - boolean variable for if build is dry-run or not
-:return: cmd - a string of the snakemake command that will be run
-"""
 def build_snakemake_command_for_build(config, dry_run) -> str:
+    """
+    Builds the snakemake command for the building 
+    the database
+
+    :param: config - Config object with all the of the fields needed
+    :param: dry_run - boolean variable for if build is dry-run or not
+    :return: cmd - a string of the snakemake command that will be run
+    """
     exec_status = "-n" if dry_run else "-c1"
     cmd = "snakemake --config DATABASE_ROOT={} \
                               WORK_ROOT={} \
@@ -324,15 +330,15 @@ def build_snakemake_command_for_build(config, dry_run) -> str:
                                                                        config.repo_dir, config.pbsim_model, exec_status)
     return cmd
 
-"""
-Builds the snakemake command for running an
-experiment
-
-:param: config - Config object with all the of the fields needed
-:param: dry_run - boolean variable for if build is dry-run or not
-:return: cmd - a string of the snakemake command to be run
-"""
 def build_snakemake_command_for_run(config, dry_run) -> str:
+    """
+    Builds the snakemake command for running an
+    experiment
+
+    :param: config - Config object with all the of the fields needed
+    :param: dry_run - boolean variable for if build is dry-run or not
+    :return: cmd - a string of the snakemake command to be run
+    """
     exec_status = "-n" if dry_run else "-c1"
     
     target = ""
@@ -352,22 +358,24 @@ def build_snakemake_command_for_run(config, dry_run) -> str:
                               TRIAL_NUM={} \
                               REPO_DIRECTORY={} \
                               OUT_PIVOT={} \
+                              FEAT_LEVEL_OPT={} \
                               {} {}".format(config.data_dir, config.work_dir, config.exp_num,
                                                                        config.num_datasets, config.trial_num,
-                                                                       config.repo_dir, config.out_pivot, exec_status, target)
+                                                                       config.repo_dir, config.out_pivot, config.feat_level_opt,
+                                                                       exec_status, target)
     return cmd
 
 ###########################################################
 # Command-line parsing and error-checking methods
 ###########################################################
 
-"""
-Parses the command line arguments 
-for all the sub-commands.
-
-:return: arguments object
-"""
 def parse_arguments():
+    """
+    Parses the command line arguments 
+    for all the sub-commands.
+
+    :return: arguments object
+    """
     # top-level parser
     parser = argparse.ArgumentParser(prog='khoice', 
                                      description="Builds khoice databases and run experiments.")
@@ -402,18 +410,20 @@ def parse_arguments():
     run_parser.add_argument("--exp6", dest="exp_6", action="store_true", default=False, help="run experiment 6.")
     run_parser.add_argument("--exp7", dest="exp_7", action="store_true", default=False, help="run experiment 7.")
     run_parser.add_argument("--in-pivot", dest="in_pivot", action="store_true", default=False, help="(only for exp 4) use in-pivot opposed to out-pivot")
+    run_parser.add_argument("--feature-level", dest="feat_level", action="store_true", default=False, help="(only for exp 6/7) perform classification at the feature level. (default: read-level)")
     run_parser.set_defaults(func="run")
 
+    parser.set_defaults(func="top-level")
     args = parser.parse_args()
     return args
 
-"""
-Verify the arguments provided to the build
-sub-command are valid, and make sense.
-
-:param: args - arguments object from argparse
-"""
 def check_build_arguments(args):
+    """
+    Verify the arguments provided to the build
+    sub-command are valid, and make sense.
+
+    :param: args - arguments object from argparse
+    """
     if not os.path.isdir(args.data_dir):
         print_error("the data directory path (-d) is not valid.\n")
     if not os.path.isdir(args.work_dir):
@@ -427,13 +437,13 @@ def check_build_arguments(args):
     if not os.path.isfile(args.pbsim_model):
         print_error("the path to the PBSIM model is not valid")
 
-"""
-Verify the arguments provided to the build
-sub-command are valid, and make sense.
-
-:param: args - arguments object from argparse
-"""
 def check_run_arguments(args):
+    """
+    Verify the arguments provided to the build
+    sub-command are valid, and make sense.
+
+    :param: args - arguments object from argparse
+    """
     if not os.path.isdir(args.data_dir):
         print_error("the data directory path (-d) is not valid.\n")
     if not os.path.isdir(args.work_dir):
@@ -452,38 +462,37 @@ def check_run_arguments(args):
     if args.work_dir[-1] != "/":
         args.work_dir += "/"
 
-
 ###########################################################
 # General helper methods for the code
 ###########################################################
 
-"""
-Prints out an error message and exits the
-code.
-
-:param: msg - the error message
-"""
 def print_error(msg) -> None:
+    """
+    Prints out an error message and exits the
+    code.
+
+    :param: msg - the error message
+    """
     print("\n\033[0;31mError:\033[00m " + msg + "\n")
     exit(1)
 
-"""
-Prints out a warning message.
-
-:param: msg - the error message
-"""
 def print_warning(msg) -> None:
+    """
+    Prints out a warning message.
+
+    :param: msg - the error message
+    """
     print("\n\033[0;33mWarning:\033[00m " + msg + "\n")
 
-"""
-Prints out a continue message to user and
-verifies that the user wants to continue
-
-:param: msg - string that will prompt the user
-
-:exit: if user decides to exit, they can answer 'n'
-"""
 def prompt_user_for_continuation(msg):
+    """
+    Prints out a continue message to user and
+    verifies that the user wants to continue
+
+    :param: msg - string that will prompt the user
+
+    :exit: if user decides to exit, they can answer 'n'
+    """
     print()
     question = "\033[0;31m[question]\033[00m "
     decision = input(question + msg + " Continue [Y/n]? ")
@@ -495,46 +504,46 @@ def prompt_user_for_continuation(msg):
         print("\nexiting now ...\n")
         exit(0)
 
-"""
-Execute a command using subprocess module, but return
-the stdout, stderr, and code
-
-:param: cmd - a string with the command-line expression
-:return: exit_code - exit code from command
-"""
 def execute_command(cmd):
+    """
+    Execute a command using subprocess module, but return
+    the stdout, stderr, and code
+
+    :param: cmd - a string with the command-line expression
+    :return: exit_code - exit code from command
+    """
     process = subprocess.Popen(cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     stdout, stderr = process.communicate()
     exit_code = process.returncode
     return [stdout, stderr, exit_code]
 
-"""
-Execute a command using subprocess module
-
-:param: cmd - a string with the command-line expression
-:param: stdout_fd - file handle for stdout from command
-:param: stderr_fd - file handle for stderr from command
-:return: exit_code - exit code from command
-"""
 def execute_command_with_files(cmd, stdout_fd, stderr_fd):
+    """
+    Execute a command using subprocess module
+
+    :param: cmd - a string with the command-line expression
+    :param: stdout_fd - file handle for stdout from command
+    :param: stderr_fd - file handle for stderr from command
+    :return: exit_code - exit code from command
+    """
     process = subprocess.Popen(cmd.split(), stdout=stdout_fd, stderr=stderr_fd)
     stdout, stderr = process.communicate()
     exit_code = process.returncode
     return exit_code
 
-"""
-Execute a command using subprocess module but
-this method is for the case you want to pipe 
-the output to files directly and you want to 
-wrap the command in a progress bar.
-
-:param: cmd - a string with the command-line expression
-:param: title - short description of this command
-:param: stdout_fd - file handle that stdout will be piped to
-:param: stderr_fd - file handle that stderr will be piped to
-:return: exit_code - exit code from command
-"""
 def execute_command_with_files_and_poll(cmd, stdout_fd, stderr_fd, title):
+    """
+    Execute a command using subprocess module but
+    this method is for the case you want to pipe 
+    the output to files directly and you want to 
+    wrap the command in a progress bar.
+
+    :param: cmd - a string with the command-line expression
+    :param: title - short description of this command
+    :param: stdout_fd - file handle that stdout will be piped to
+    :param: stderr_fd - file handle that stderr will be piped to
+    :return: exit_code - exit code from command
+    """
     process = subprocess.Popen(cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
     progress_line = re.compile('[0-9]+ of [0-9]+ steps \([0-9]+%\) done$')
 

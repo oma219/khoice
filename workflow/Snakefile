@@ -32,9 +32,11 @@ num_of_non_kmers = config["NON_KMERS_PER_DATASET"] # meaning either MEMs or half
 
 out_pivot_exp4 = config["OUT_PIVOT"]
 
+feat_level_opt = config["FEAT_LEVEL_OPT"]
+
 # k-mer lengths used in experiments
-k_values = [str(x) for x in range(7, 31, 1)] + [str(x) for x in range(34, 50, 3)]
-#k_values = [str(x) for x in range(7, 31, 4)] # --> Used for testing
+#k_values = [str(x) for x in range(7, 31, 1)] + [str(x) for x in range(34, 50, 3)]
+k_values = [str(x) for x in range(7, 31, 8)] # --> Used for testing
 
 t_values = [1] + [str(x) for x in range(5, 35, 5)]
 
