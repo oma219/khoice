@@ -14,6 +14,11 @@ from dataclasses import dataclass
 import subprocess
 import time
 from alive_progress import alive_bar
+import pandas as pd
+from plotnine import *
+import contextlib
+import io
+import sys
 
 __VERSION__ = "1.0.0"
 
@@ -178,8 +183,81 @@ def run_main(args):
 
     logging.info(f"run has completed, total time ({(time.time()-start):.3f} sec)\n")
 
+def plot_main(args):
+    """
+    Main function for the plot sub-command that 
+    is meant to take the run output and make plots.
+    """
+    # make sure the provided options are valid
+    check_plot_arguments(args)
+
+    # verify that the expected files are present in all trials
+    required_files = get_required_files_for_plot(args.exp_num)
+    trial_list = inspect_work_directory_for_plot(args.work_dir, required_files)
+
+    logging.info(f"found {len(trial_list)} replicates in this results directory, and found expected files."); print()
+
+    if args.exp_num == 2:
+        logging.info(f"for experiment 2, we will only be using 1 trial, specifically trial {trial_list[0]}.")
+        generate_exp2_plot(args.work_dir, trial_list[0], args.out_dir)
+
+
+
+    
+    # print(args.exp_num)
+    # print(args.out_dir)
+    # print(args.work_dir)
+
 ###########################################################
-# Helper methods for both sub-commands
+# Plotting methods
+###########################################################
+
+def generate_exp2_plot(work_dir, trial_num, out_dir):
+    """
+    Generates the plot for experiment 2.
+
+    :param: work_dir - string, path to folder with results in it
+    :param: trial_num - integer, trial number that we will extract data from
+    :param: out_dir - string, path to folder we will save results in
+
+    :return: ...
+    """
+    csv_path = f"{work_dir}trial_{trial_num}/across_dataset_analysis_type_2/across_dataset_analysis.csv"
+    assert os.path.isfile(csv_path)
+
+    # TODO: generalize this to create the plot for each group
+    df = pd.read_csv(csv_path)
+    df_filt = df.loc[df['group_num'] == 'group_1']
+    df_filt = pd.melt(df_filt, id_vars=['group_num', 'k'], 
+                               value_vars=['percent_1_occ', 'percent_2_to_3', 'percent_4_to_8', 'percent_9_more'],
+                               var_name='range', value_name='percent')
+    
+    # TODO: write some to code to generalize the x-axis with the kmer values
+
+    plot = (ggplot(df_filt, aes(fill="range", x="k", y="percent")) + 
+            geom_bar(position="fill", stat="identity") +
+            theme_classic() +
+            theme(axis_title_x=element_text(size =14),
+                  axis_title_y=element_text(size=14),
+                  legend_position = "bottom", 
+                  legend_text=element_text(size=10),
+                  legend_box="vertical",
+                  legend_title=element_text(size=10),
+                  axis_text=element_text(size=14, color="black")) +
+            labs(x="Kmer Length (k)",
+                 y="Ratio of Unique Kmers") +
+            scale_fill_discrete(name = "Number of Groups the Kmers Occur In:",
+                                labels = ("Only Pivot", "2 to 3 Groups", "4 Groups", ">=9 Groups")))
+
+    # save the plot
+    file_name = f"/home/oahmed6/scr4_blangme2/oahmed/khoice_test/plots/database_0/exp_2/trial_{trial_num}.pdf"
+    with nostdout():
+        plot.save(file_name, height=6, width=8, verbose=True)
+    logging.info(f"plot was saved in: {file_name}")
+
+
+###########################################################
+# Helper methods for the sub-commands
 ###########################################################
 
 def final_file_name_for_exp(args, curr_trial):
@@ -307,6 +385,53 @@ def inspect_work_directory_for_build(work_dir) -> int:
             print_error(f"{item} was found, but not expected in working directory.")
     return max_num+1
 
+def inspect_work_directory_for_plot(work_dir, required_files) -> int:
+    """
+    Inspect the working directory for the plot sub-command to
+    see how many trials there are and validates that the requested files
+    are present in each trial.
+
+    :param: work_dir - path to the working directory, where trial_* should be
+    :return: trial_list - list of integers, the trial numbers in results folder
+
+    :error: when there are missing files
+    :error: when there are no results at all
+    """
+    # get number of trials
+    trial_re = re.compile('trial_[0-9]+$')
+    max_num = 0
+    trial_list = []
+    for item in os.listdir(work_dir):
+        if trial_re.match(item):
+            max_num = max(max_num, int(item.split("_")[1]))
+            trial_list.append(int(item.split("_")[1]))
+        elif item[0] != ".": # avoid hidden files
+            print_error(f"{item} was found, but not expected in working directory.")
+    
+    if len(trial_list) == 0:
+        print_error("there were no results found in the provided folder.")
+    
+    # check the existence of each file
+    verified = all([all([os.path.isfile(work_dir + f"trial_{i}/" + filename) for filename in required_files]) for i in trial_list])
+    trial_list.sort()
+    return trial_list
+
+def get_required_files_for_plot(exp_num):
+    """
+    Returns the relative filenames for files that are expected
+    to be present in the results folder in order to make the
+    plot.
+
+    :param: exp_num - integer, the experiment we want to plot the data from
+    :return: file_list - list of strings, the files needed to plot exp_num
+
+    :error: occurs when a unsupported experiment number if provided
+    """
+    if exp_num == 2:
+        return ["across_dataset_analysis_type_2/across_dataset_analysis.csv"]
+    else:
+        print_error("unexpected experiment number was provided.")
+
 def build_snakemake_command_for_build(config, dry_run) -> str:
     """
     Builds the snakemake command for the building 
@@ -413,6 +538,16 @@ def parse_arguments():
     run_parser.add_argument("--feature-level", dest="feat_level", action="store_true", default=False, help="(only for exp 6/7) perform classification at the feature level. (default: read-level)")
     run_parser.set_defaults(func="run")
 
+    # create the parser for the "plot" sub-command
+    plot_parser = sub_parsers.add_parser('plot', 
+                                          help='plot the results from khoice experiment',
+                                          description="Plots results from running a khoice experiment")
+    plot_parser.add_argument("-w", "--workdir", dest="work_dir", help="folder path to where the results are", required=True, type=str)
+    plot_parser.add_argument("-o", "--outdir", dest="out_dir", help="folder where the plots will be saved", required=True, type=str)
+    plot_parser.add_argument("--repo-dir", dest="repo_dir", help="path to khoice repo", required=True, type=str)
+    plot_parser.add_argument("--exp2", dest="exp_2", action="store_true", default=False, help="plot the results from experiment 2.")
+    plot_parser.set_defaults(func="plot")
+
     parser.set_defaults(func="top-level")
     args = parser.parse_args()
     return args
@@ -461,6 +596,31 @@ def check_run_arguments(args):
 
     if args.work_dir[-1] != "/":
         args.work_dir += "/"
+
+def check_plot_arguments(args):
+    """
+    Verify the arguments provided to the plot
+    sub-command are valid, and make sense.
+
+    :param: args - arguments object from argparse
+    """
+    if not os.path.isdir(args.work_dir):
+        print_error("the working directory (-w) is not valid.\n")
+    if args.work_dir[-1] != "/":
+        args.work_dir += "/"
+
+    if not os.path.isdir(args.out_dir):
+        print_error("the output directory (-o) is not valid.")
+    if args.out_dir[-1] != "/":
+        args.out_dir += "/"
+
+    count = 0
+    for turned_on, val in [[args.exp_2, 2]]:
+        if turned_on:
+            args.exp_num = val
+            count += 1
+    if count != 1:
+        print_error("must specify exactly one of the experiments to run.")
 
 ###########################################################
 # General helper methods for the code
@@ -574,13 +734,43 @@ def execute_command_with_files_and_poll(cmd, stdout_fd, stderr_fd, title):
 
     return exit_code
 
+class DummyFile(object):
+    """
+    Dummy object when you do not care about the
+    stdout/stderr from a function or set of lines
+    of code
+
+    Copied from https://stackoverflow.com/questions/2828953/silence-the-stdout-of-a-function-in-python-without-trashing-sys-stdout-and-resto
+    """
+    def write(self, x): pass
+
+@contextlib.contextmanager
+def nostdout():
+    """
+    Suppresses the stdout/stderr from a context, this
+    was written since the plotnine save method
+    verbose option was not working.
+    """
+    save_stdout = sys.stdout
+    save_stderr = sys.stderr
+    sys.stdout = DummyFile()
+    sys.stderr = DummyFile()
+    yield
+    sys.stderr = save_stderr
+    sys.stdout = save_stdout
+
 if __name__ == '__main__':
     args = parse_arguments()
     # old format: datefmt="%Y-%m-%d %H:%M:%S"
-    logging.basicConfig(level=logging.DEBUG, format='\033[0;32m[log][%(asctime)s]\033[00m %(message)s', datefmt="%H:%M:%S")
+    logging.basicConfig(level=logging.INFO, format='\033[0;32m[log][%(asctime)s]\033[00m %(message)s', datefmt="%H:%M:%S")
+
+    logging.getLogger('matplotlib.font_manager').disabled = True
+
 
     print(f"\n\033[0;32mkhoice version: {__VERSION__}\033[00m\n")
     if args.func == "build":    
         build_main(args)
     elif args.func == "run":
         run_main(args)
+    elif args.func == "plot":
+        plot_main(args)
