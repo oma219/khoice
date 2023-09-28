@@ -45,7 +45,7 @@ def run_command(command, loading_bar, sleep_time=1):
 
 def find_refseq_ftp_paths(requested_species, using_file_input):
     """ Finds all the RefSeq FTP links for requested species """
-    command = ("esearch -db assembly -query '(\"{}\"[Organism] OR {}[All Fields]) AND ((latest[filter] OR \"latest refseq\"[filter]) AND \"complete genome\"[filter] AND all[filter] NOT anomalous[filter])'"
+    command = ("esearch -db assembly -query '\"{}\"[Organism] AND (\"latest refseq\"[filter] AND \"complete genome\"[filter] AND all[filter] NOT anomalous[filter])'"
                " | esummary | "
                " xtract -pattern DocumentSummary -block FtpPath -match '@type:RefSeq' -element FtpPath " 
                " | sed 's/$/\//' ")
