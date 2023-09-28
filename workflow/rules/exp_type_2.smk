@@ -294,7 +294,11 @@ rule build_kmc_database_on_genome_exp_type_2:
         "step_1_type_2/rest_of_set/k_{k}/dataset_{num}/{genome}.kmc_pre",
         "step_1_type_2/rest_of_set/k_{k}/dataset_{num}/{genome}.kmc_suf"
     shell:
-        "kmc -fm -m64 -k{wildcards.k} -ci1 input_type_2/rest_of_set/dataset_{wildcards.num}/{wildcards.genome}.fna.gz step_1_type_2/rest_of_set/k_{wildcards.k}/dataset_{wildcards.num}/{wildcards.genome} tmp/"
+        """
+        mkdir tmp_{wildcards.genome}_{wildcards.k}/
+        kmc -fm -m64 -k{wildcards.k} -ci1 input_type_2/rest_of_set/dataset_{wildcards.num}/{wildcards.genome}.fna.gz step_1_type_2/rest_of_set/k_{wildcards.k}/dataset_{wildcards.num}/{wildcards.genome} tmp_{wildcards.genome}_{wildcards.k}/
+        rmdir tmp_{wildcards.genome}_{wildcards.k}/
+        """
 
 rule build_kmc_database_on_pivot_exp_type_2:
     input:
@@ -303,7 +307,11 @@ rule build_kmc_database_on_pivot_exp_type_2:
         "step_1_type_2/pivot/k_{k}/dataset_{num}/pivot_{num}.kmc_pre",
         "step_1_type_2/pivot/k_{k}/dataset_{num}/pivot_{num}.kmc_suf"
     shell:
-        "kmc -fm -m64 -k{wildcards.k} -ci1 {input} step_1_type_2/pivot/k_{wildcards.k}/dataset_{wildcards.num}/pivot_{wildcards.num} tmp/"
+        """
+        mkdir tmp_pivot_{wildcards.num}_{wildcards.k}/
+        kmc -fm -m64 -k{wildcards.k} -ci1 {input} step_1_type_2/pivot/k_{wildcards.k}/dataset_{wildcards.num}/pivot_{wildcards.num} tmp_pivot_{wildcards.num}_{wildcards.k}/
+        rmdir tmp_pivot_{wildcards.num}_{wildcards.k}/
+        """
 
 
 #   Section 3.2: Converts each kmer database into 
