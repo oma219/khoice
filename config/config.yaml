@@ -15,5 +15,6 @@ KMERS_PER_DATASET: 1000000
 NON_KMERS_PER_DATASET: 25000000
 NUM_READS_PER_DATASET: 10000
 TRIAL_INFO_DIR: "/home/oahmed6/scr4_blangme2/oahmed/khoice_exps/trial_info"
+PIVOT_LIST: "/home/oahmed6/pivots_names.txt"
 
 

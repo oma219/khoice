@@ -23,8 +23,8 @@
 
 if exp_type == 6:
     # Make tmp directory for kmc
-    if not os.path.isdir("tmp"):
-        os.mkdir("tmp")
+    # if not os.path.isdir("tmp"):
+    #     os.mkdir("tmp")
 
     # Parse out a pivot from the downloaded dataset
     if not os.path.isdir("exp6_input/"):
@@ -168,7 +168,14 @@ rule build_kmc_database_on_genome_exp6:
         "exp6_intermediate/step_1/rest_of_set/k_{k}/dataset_{num}/{genome}.kmc_pre",
         "exp6_intermediate/step_1/rest_of_set/k_{k}/dataset_{num}/{genome}.kmc_suf"
     shell:
-        "kmc -fm -m64 -k{wildcards.k} -ci1 {input} exp6_intermediate/step_1/rest_of_set/k_{wildcards.k}/dataset_{wildcards.num}/{wildcards.genome} tmp/"
+        """
+        mkdir tmp_{wildcards.genome}_{wildcards.k}/
+        kmc -fm -m8 -k{wildcards.k} \
+            -ci1 {input} \
+            exp6_intermediate/step_1/rest_of_set/k_{wildcards.k}/dataset_{wildcards.num}/{wildcards.genome} \
+            tmp_{wildcards.genome}_{wildcards.k}/
+        rmdir tmp_{wildcards.genome}_{wildcards.k}/
+        """
 
 rule build_kmc_database_on_pivot_exp6:
     input:
@@ -178,7 +185,12 @@ rule build_kmc_database_on_pivot_exp6:
         "exp6_intermediate/step_1/pivot/k_{k}/{read_type}/pivot_{num}.kmc_suf"
     shell:
         """
-        kmc -fm -m64 -k{wildcards.k} -ci1 {input} exp6_intermediate/step_1/pivot/k_{wildcards.k}/{wildcards.read_type}/pivot_{wildcards.num} tmp/
+        mkdir tmp_pivot_{wildcards.num}_{wildcards.k}_{wildcards.read_type}/
+        kmc -fm -m8 -k{wildcards.k} \
+            -ci1 {input} \
+            exp6_intermediate/step_1/pivot/k_{wildcards.k}/{wildcards.read_type}/pivot_{wildcards.num} \
+            tmp_pivot_{wildcards.num}_{wildcards.k}_{wildcards.read_type}/
+        rmdir tmp_pivot_{wildcards.num}_{wildcards.k}_{wildcards.read_type}/
         """
 
 #   Section 3.2: Converts each kmer-database for a non-pivot

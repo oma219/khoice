@@ -24,10 +24,6 @@
 ####################################################
 
 if exp_type == 2:
-    # Make tmp directory for kmc
-    # if not os.path.isdir("tmp"):
-    #     os.mkdir("tmp")
-    
     # Parse out a pivot from the downloaded dataset
     if not os.path.isdir("exp2_input_data/"):
         for i in range(1, num_datasets+1):
@@ -128,7 +124,7 @@ def get_across_group_union_for_pivot_exp2(wildcards):
     input_files = [f"exp2_within_databases/rest_of_set/k_{k}/dataset_{i}/dataset_{i}.transformed.combined.transformed.kmc_pre" for i in range(1, num_datasets+1) if i != num]
     return input_files
 
-def get_all_genomes_in_dataset(wildcards):
+def get_all_genomes_in_dataset_exp2(wildcards):
     """ Returns a list of database in a certain dataset """
     input_files = []
     for data_file in os.listdir(f"exp2_input_data/rest_of_set/dataset_{wildcards.num}/"):
@@ -136,8 +132,6 @@ def get_all_genomes_in_dataset(wildcards):
             file_name = data_file.split(".fna.gz")[0]
             input_files.append(f"exp2_genome_sets/rest_of_set/k_{wildcards.k}/dataset_{wildcards.num}/{file_name}.transformed.kmc_pre")
     return input_files
-
-
 
 def get_dataset_pivot(wildcards):
     """ Return a path to the pivot for certain dataset """
@@ -154,7 +148,7 @@ def get_within_group_histogram_files(wildcards):
                 input_files.append(f"exp2_within_dataset_results/k_{k}/dataset_{num}/{op}/dataset_{num}_pivot_{op}_group.hist.txt")
     return input_files
 
-def get_across_group_histogram_files(wildcards):
+def get_across_group_histogram_files_exp2(wildcards):
     """ Returns all the histogram files for across group experiment in specific order """
     input_files = []
     for num in range(1, num_datasets+1):
@@ -162,56 +156,6 @@ def get_across_group_histogram_files(wildcards):
             for op in ['subtract', 'intersect']:
                 input_files.append(f"exp2_across_dataset_results/k_{k}/dataset_{num}/{op}/dataset_{num}_pivot_{op}_group.hist.txt")
     return input_files
-
-def summarize_histogram_type2(sub_counts, inter_counts, num_genomes_in_dataset, across_group_analysis, k):
-
-    """ 
-        Takes in histogram of kmer occurrences, and returns the metrics for the 
-        bar charts summarized below:
-
-            %_1_occ - percentage of unique kmers that only occur in one genome
-            %_25_or_less - percentage of unique kmers that occur in multiple genomes, in 25% of the genomes or less
-            %_25_to_75 - percentage of unique kmers that occur in multiple genomes, in 25% to 75% of the genomes
-            %_75_or_more - percentage of unique kmers that occur in multiple genomes, in 75% or more of the genomes
-            unique_stat - weighted sum of kmer occurrents = SUM([occ * %_unique_occ for occ in range(255)]) 
-    """
-    # Perform a couple of assertions to start ...
-    assert inter_counts[0] == 0, "intersection counts should have 0 unique kmers"
-    assert sum(sub_counts[1:]) == 0, "all of kmers in sub_counts should be unique"
-
-    # Start to calculate the metrics ...
-    metrics = [0 for i in range(7)]
-    total_unique_kmers = sum(sub_counts) + sum(inter_counts)
-
-    boundaries = [0.25, 0.75]
-    boundary_indices = [max(int(percent * num_genomes_in_dataset), 1) for percent in boundaries]
-
-    # Special cases where indices are customized ...
-    if across_group_analysis:
-        boundary_indices = [3, 8]
-
-    metrics[0] = round(sub_counts[0]/total_unique_kmers, 3)
-    metrics[1] = round(sum([inter_counts[i] for i in range(1, boundary_indices[0])])/total_unique_kmers, 3)
-    metrics[2] = round(sum([inter_counts[i] for i in range(boundary_indices[0], boundary_indices[1])])/total_unique_kmers, 3)
-    metrics[3] = round(sum([inter_counts[i] for i in range(boundary_indices[1], len(inter_counts))])/total_unique_kmers, 3)
-
-    rounding_error = abs(sum(metrics[0:4])-1) 
-    assert rounding_error < 0.05, "Issue occurred with histogram summarization"
-
-    # Both unnormalized, and normalized uniqueness statistic
-    metrics[4] = (1 * sub_counts[0]/total_unique_kmers)
-    metrics[4] += sum([((i+1) * (inter_counts[i]/total_unique_kmers)) for i in range(1, len(inter_counts))])
-    metrics[4] = round(metrics[4], 4)
-
-    metrics[5] = ((1/num_genomes_in_dataset) * sub_counts[0]/total_unique_kmers)
-    metrics[5] += sum([(((i+1)/num_genomes_in_dataset) * (inter_counts[i]/total_unique_kmers)) for i in range(1, len(inter_counts))])
-    metrics[5] = round(metrics[5], 4)
-
-    # Calculate the fraction used by the delta measure
-    metrics[6] = round(total_unique_kmers/k, 4)
-    return metrics
-
-
 
 ####################################################
 # Section 3: Rules needed for this experiment type
@@ -229,7 +173,7 @@ rule build_kmc_database_on_genome_exp2:
     shell:
         """
         mkdir tmp_{wildcards.genome}_{wildcards.k}/
-        kmc -fm -m64 -k{wildcards.k} \
+        kmc -fm -m8 -k{wildcards.k} \
                      -ci1 \
                       exp2_input_data/rest_of_set/dataset_{wildcards.num}/{wildcards.genome}.fna.gz \
                       exp2_build_step/rest_of_set/k_{wildcards.k}/dataset_{wildcards.num}/{wildcards.genome} \
@@ -246,7 +190,7 @@ rule build_kmc_database_on_pivot_exp2:
     shell:
         """
         mkdir tmp_pivot_{wildcards.num}_{wildcards.k}/
-        kmc -fm -m64 -k{wildcards.k} \
+        kmc -fm -m8 -k{wildcards.k} \
                      -ci1 \
                       {input} \
                       exp2_build_step/pivot/k_{wildcards.k}/dataset_{wildcards.num}/pivot_{wildcards.num} \
@@ -271,6 +215,9 @@ rule transform_genome_to_set_exp2:
                   exp2_build_step/rest_of_set/k_{wildcards.k}/dataset_{wildcards.num}/{wildcards.genome} \
                   set_counts 1 \
                   exp2_genome_sets/rest_of_set/k_{wildcards.k}/dataset_{wildcards.num}/{wildcards.genome}.transformed
+        
+        # Delete the original genome database
+        rm exp2_build_step/rest_of_set/k_{wildcards.k}/dataset_{wildcards.num}/{wildcards.genome}.kmc_*
         """
 
 rule transform_pivot_to_set_exp2:
@@ -286,6 +233,9 @@ rule transform_pivot_to_set_exp2:
                   exp2_build_step/pivot/k_{wildcards.k}/dataset_{wildcards.num}/pivot_{wildcards.num} \
                   set_counts 1 \
                   exp2_genome_sets/pivot/k_{wildcards.k}/dataset_{wildcards.num}/pivot_{wildcards.num}.transformed
+        
+        # Delete the pivot database
+        rm exp2_build_step/pivot/k_{wildcards.k}/dataset_{wildcards.num}/pivot_{wildcards.num}.kmc_*
         """
 
 
@@ -294,7 +244,7 @@ rule transform_pivot_to_set_exp2:
 
 rule within_group_union_exp2:
     input:
-        get_all_genomes_in_dataset
+        get_all_genomes_in_dataset_exp2
     output:
         "exp2_within_databases/rest_of_set/k_{k}/dataset_{num}/dataset_{num}.transformed.combined.kmc_pre",
         "exp2_within_databases/rest_of_set/k_{k}/dataset_{num}/dataset_{num}.transformed.combined.kmc_suf"
@@ -302,6 +252,9 @@ rule within_group_union_exp2:
         """
         kmc_tools complex \
                   exp2_complex_ops/within_groups/k_{wildcards.k}/dataset_{wildcards.num}/within_dataset_{wildcards.num}.txt
+        
+        # Delete all the genome sets for this database
+        rm exp2_genome_sets/rest_of_set/k_{wildcards.k}/dataset_{wildcards.num}/*.transformed.kmc_*
         """
 
 
@@ -353,12 +306,61 @@ rule within_group_histogram_exp2:
                   exp2_within_dataset_results/k_{wildcards.k}/dataset_{wildcards.num}/{wildcards.op}/dataset_{wildcards.num}_pivot_{wildcards.op}_group \
                   histogram \
                   exp2_within_dataset_results/k_{wildcards.k}/dataset_{wildcards.num}/{wildcards.op}/dataset_{wildcards.num}_pivot_{wildcards.op}_group.hist.txt 
+        # Delete the input files
+        rm exp2_within_dataset_results/k_{wildcards.k}/dataset_{wildcards.num}/{wildcards.op}/dataset_{wildcards.num}_pivot_{wildcards.op}_group.kmc_*
         """
 
 
 # Section 3.5: Performs the within-group analysis, analyzes the specificity
 #              of the pivot genome's kmer with respect to other genomes in 
 #              same dataset
+
+def summarize_histogram_within_groups_exp2(sub_counts, inter_counts, num_genomes_in_dataset, across_group_analysis, k):
+    """ 
+        Takes in histogram of kmer occurrences, and returns the metrics for the 
+        bar charts summarized below:
+
+            %_1_occ - percentage of unique kmers that only occur in one genome
+            %_25_or_less - percentage of unique kmers that occur in multiple genomes, in 25% of the genomes or less
+            %_25_to_75 - percentage of unique kmers that occur in multiple genomes, in 25% to 75% of the genomes
+            %_75_or_more - percentage of unique kmers that occur in multiple genomes, in 75% or more of the genomes
+            unique_stat - weighted sum of kmer occurrents = SUM([occ * %_unique_occ for occ in range(255)]) 
+    """
+    # Perform a couple of assertions to start ...
+    assert inter_counts[0] == 0, "intersection counts should have 0 unique kmers"
+    assert sum(sub_counts[1:]) == 0, "all of kmers in sub_counts should be unique"
+
+    # Start to calculate the metrics ...
+    metrics = [0 for i in range(7)]
+    total_unique_kmers = sum(sub_counts) + sum(inter_counts)
+
+    boundaries = [0.25, 0.75]
+    boundary_indices = [max(int(percent * num_genomes_in_dataset), 1) for percent in boundaries]
+
+    # Special cases where indices are customized ...
+    if across_group_analysis:
+        boundary_indices = [3, 8]
+
+    metrics[0] = round(sub_counts[0]/total_unique_kmers, 3)
+    metrics[1] = round(sum([inter_counts[i] for i in range(1, boundary_indices[0])])/total_unique_kmers, 3)
+    metrics[2] = round(sum([inter_counts[i] for i in range(boundary_indices[0], boundary_indices[1])])/total_unique_kmers, 3)
+    metrics[3] = round(sum([inter_counts[i] for i in range(boundary_indices[1], len(inter_counts))])/total_unique_kmers, 3)
+
+    rounding_error = abs(sum(metrics[0:4])-1) 
+    assert rounding_error < 0.05, "Issue occurred with histogram summarization"
+
+    # Both unnormalized, and normalized uniqueness statistic
+    metrics[4] = (1 * sub_counts[0]/total_unique_kmers)
+    metrics[4] += sum([((i+1) * (inter_counts[i]/total_unique_kmers)) for i in range(1, len(inter_counts))])
+    metrics[4] = round(metrics[4], 4)
+
+    metrics[5] = ((1/num_genomes_in_dataset) * sub_counts[0]/total_unique_kmers)
+    metrics[5] += sum([(((i+1)/num_genomes_in_dataset) * (inter_counts[i]/total_unique_kmers)) for i in range(1, len(inter_counts))])
+    metrics[5] = round(metrics[5], 4)
+
+    # Calculate the fraction used by the delta measure
+    metrics[6] = round(total_unique_kmers/k, 4)
+    return metrics
 
 rule within_group_analysis_exp2:
     input:
@@ -383,7 +385,7 @@ rule within_group_analysis_exp2:
                     inter_results = inter_fd.readlines()
                     inter_counts = [int(record.split()[1]) for record in inter_results]
                 
-                metrics = [f"group_{dataset_num}", k_value] + summarize_histogram_type2(sub_counts, inter_counts, num_genomes_in_dataset, False, int(k_value))
+                metrics = [f"group_{dataset_num}", k_value] + summarize_histogram_within_groups_exp2(sub_counts, inter_counts, num_genomes_in_dataset, False, int(k_value))
                 all_metrics.append(metrics)
 
             # Generate the normalized cardinality/k values for each group
@@ -401,6 +403,7 @@ rule within_group_analysis_exp2:
             for metrics in all_metrics:
                 metrics_str = ",".join([str(x) for x in metrics])
                 output_fd.write(f"{metrics_str}\n")
+        
 
 
 # Section 3.6: Transform each rest_of_set datbase into counts of 1
@@ -481,20 +484,43 @@ rule across_group_histogram_exp2:
                   exp2_across_dataset_results/k_{wildcards.k}/dataset_{wildcards.num}/{wildcards.op}/dataset_{wildcards.num}_pivot_{wildcards.op}_group \
                   histogram \
                   exp2_across_dataset_results/k_{wildcards.k}/dataset_{wildcards.num}/{wildcards.op}/dataset_{wildcards.num}_pivot_{wildcards.op}_group.hist.txt
+        # Delete the input files
+        rm exp2_across_dataset_results/k_{wildcards.k}/dataset_{wildcards.num}/{wildcards.op}/dataset_{wildcards.num}_pivot_{wildcards.op}_group.kmc_*
         """
 
 # Section 3.9: Performs the across-group analysis, looks at each pivot
 #              and analyzes how many of the other datasets does it occur in.
 
+def summarize_histogram_across_groups_exp2(sub_counts, inter_counts, num_datasets):
+    """
+    Used by the across_group_analysis_exp2 rule
+    """
+    # Perform a couple of assertions to make sure data is as expected
+    assert inter_counts[0] == 0, "intersections kmers should occur in at least 2 groups"
+    assert sum(sub_counts[1:]) == 0, "all kmers in subtraction should be unique"
+
+    # Start to calculate the metrics
+    metrics = [0.0 for i in range(num_datasets)]
+    total_unique_kmers = sum(sub_counts) + sum(inter_counts)
+
+    metrics[0] = round(sub_counts[0]/total_unique_kmers, 3)
+    for i in range(1, num_datasets):
+        metrics[i] = round(inter_counts[i]/total_unique_kmers, 3)
+    
+    rounding_error = abs(sum(metrics)-1)
+    assert rounding_error < 0.05, "Issue occured with across-group histogram summarization"
+
+    return metrics
+    
 rule across_group_analysis_exp2:
     input:
-        get_across_group_histogram_files
+        get_across_group_histogram_files_exp2
     output:
         "exp2_across_dataset_analysis/across_dataset_analysis.csv"
     run:
         with open(output[0], "w") as output_fd:
-            output_fd.write(f"group_num,k,percent_1_occ,percent_2_to_3,percent_4_to_8,percent_9_more," 
-                             "unique_stat,unique_stat_norm,delta_frac,delta_frac_norm\n")
+            percent_str = ",".join([f"percent_{i}" for i in range(1, num_datasets+1)])
+            output_fd.write(f"group_num,k,{percent_str}\n")
             
             all_metrics = []
             for i in range(0, len(input), 2):
@@ -508,24 +534,25 @@ rule across_group_analysis_exp2:
                     inter_results = inter_fd.readlines()
                     inter_counts = [int(record.split()[1]) for record in inter_results]
                 
-                metrics = [f"group_{dataset_num}", k_value] + summarize_histogram_type2(sub_counts, inter_counts, num_datasets, True, int(k_value))
+                metrics = [f"group_{dataset_num}", k_value] + summarize_histogram_across_groups_exp2(sub_counts, inter_counts, num_datasets)
                 all_metrics.append(metrics)
 
-            # Generate the normalized cardinality/k values for each group
-            for i in range(1, num_datasets+1):
-                id_str = f"group_{i}"
-                values = [metrics[8] for metrics in all_metrics if metrics[0] == id_str]
-                max_ratio = max(values)
+            # # Generate the normalized cardinality/k values for each group
+            # for i in range(1, num_datasets+1):
+            #     id_str = f"group_{i}"
+            #     values = [metrics[8] for metrics in all_metrics if metrics[0] == id_str]
+            #     max_ratio = max(values)
 
-                # Divide all the values in that group with the max value
-                for metrics in all_metrics:
-                    if metrics[0] == id_str:
-                        metrics.append(round(metrics[8]/max_ratio, 4))
+            #     # Divide all the values in that group with the max value
+            #     for metrics in all_metrics:
+            #         if metrics[0] == id_str:
+            #             metrics.append(round(metrics[8]/max_ratio, 4))
             
             # Print all the values to csv file
             for metrics in all_metrics:
                 metrics_str = ",".join([str(x) for x in metrics])
                 output_fd.write(f"{metrics_str}\n")
+            
 
 
 # Section 3.10: Overall rule to generate all the results

@@ -14,31 +14,31 @@ configfile: "config/config.yaml"
 
 base_dir = config["WORK_ROOT"]
 database_root = config["DATABASE_ROOT"]
-
 exp_type = config["EXP_TYPE"]
 num_datasets = config["NUM_DATASETS"]
 num_trials = config["NUM_TRIALS"]
 curr_trial = config["CURR_TRIAL"]
-
 repo_dir = config["REPO_DIRECTORY"]
 r_dir = config["RINDEX_BUILD_DIRECTORY"]
 trial_info_dir = config["TRIAL_INFO_DIR"]
-
 pbsim_model = config["PBSIM_MODEL"]
 thresh = config["THRESHOLD"]
 num_reads_per_dataset =  config["NUM_READS_PER_DATASET"]
 num_kmers = config["KMERS_PER_DATASET"]
 num_of_non_kmers = config["NON_KMERS_PER_DATASET"] # meaning either MEMs or half-MEMs
-
 out_pivot_exp4 = config["OUT_PIVOT"]
-
 feat_level_opt = config["FEAT_LEVEL_OPT"]
+pivot_file = config["PIVOT_LIST"]
+
+if not os.path.isfile(pivot_file):
+    print("Error: the provided pivot file is not valid.")
+    exit(1)
 
 # k-mer lengths used in experiments
-#k_values = [str(x) for x in range(7, 31, 1)] + [str(x) for x in range(34, 50, 3)]
-k_values = [str(x) for x in range(7, 31, 8)] # --> Used for testing
-
-t_values = [1] + [str(x) for x in range(5, 35, 5)]
+k_values = [str(x) for x in range(7, 31, 1)] + [str(x) for x in range(35, 81, 5)] + [str(x) for x in range(90, 151, 10)] + ["175", "200"]
+# k_values = [str(x) for x in range(7, 31, 1)] + [str(x) for x in range(34, 50, 3)]
+# k_values = [str(x) for x in range(7, 31, 8)] # --> Used for testing
+# t_values = [1] + [str(x) for x in range(5, 35, 5)]
 
 ###############################################################################
 # IMPORTANT: Sets the working directory based on configuration parameter, and 

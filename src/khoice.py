@@ -761,11 +761,9 @@ def nostdout():
 
 if __name__ == '__main__':
     args = parse_arguments()
-    # old format: datefmt="%Y-%m-%d %H:%M:%S"
+    
     logging.basicConfig(level=logging.INFO, format='\033[0;32m[log][%(asctime)s]\033[00m %(message)s', datefmt="%H:%M:%S")
-
     logging.getLogger('matplotlib.font_manager').disabled = True
-
 
     print(f"\n\033[0;32mkhoice version: {__VERSION__}\033[00m\n")
     if args.func == "build":    

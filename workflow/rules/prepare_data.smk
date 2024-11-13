@@ -48,12 +48,19 @@ rule data_prep_choose_pivot_from_each_dataset:
         "trial_{trial}/exp0_nonpivot_genomes/dataset_{num}/nonpivot_names.txt"
     shell:
         """
+        # Grab the approriate pivot name from provided files
+        pivot_line=$(( ({wildcards.num} - 1) * {num_trials} + {wildcards.trial} ))
+        pivot_genome_name=$(cat {pivot_file} | head -n $pivot_line | tail -n1)
+
         # Copy all genomes to non-pivot folder
         cp {input} trial_{wildcards.trial}/exp0_nonpivot_genomes/dataset_{wildcards.num}/
 
-        # Choose a pivot genome from the non-pivot folder
-        pivot_genome_path=$(ls trial_{wildcards.trial}/exp0_nonpivot_genomes/dataset_{wildcards.num}/*.fna.gz | shuf | head -n1)
-        pivot_genome_name=$(echo $pivot_genome_path  | awk -F/ '{{print $NF}}')
+        # Get the path for the pivot
+        pivot_genome_path=$(ls trial_{wildcards.trial}/exp0_nonpivot_genomes/dataset_{wildcards.num}/*.fna.gz | grep $pivot_genome_name)
+
+        # OLD CODE AFTER PROVIDING PIVOT FILE: Choose a pivot genome from the non-pivot folder
+        # pivot_genome_path=$(ls trial_{wildcards.trial}/exp0_nonpivot_genomes/dataset_{wildcards.num}/*.fna.gz | shuf | head -n1)
+        # pivot_genome_name=$(echo $pivot_genome_path  | awk -F/ '{{print $NF}}')
 
         # Copy pivot to pivot folder, save the name, and remove it
         cp $pivot_genome_path {output[0]}
